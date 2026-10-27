@@ -1,0 +1,26 @@
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Local / secrets
+.env
+.env.*
+*.log
+
+# Project outputs
+runs/
+
+# OS
+.DS_Store
+Thumbs.db
