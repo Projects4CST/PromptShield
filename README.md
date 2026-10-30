@@ -6,7 +6,8 @@ PromptShield is a teaching and experimental tool. It lets you see every input, d
 
 ## Features (v0.1)
 
-- YAML test cases with attacker goals and source notes
+- 120 YAML test cases with attacker goals and source notes (48 attacked, 48 matched clean, 24 benign quoted-instruction)
+- Group-level dev/held-out split frozen by per-case SHA-256 (`promptshield split`)
 - Three workflows: web retrieval, document summarization, email
 - Four defense configurations: **D0** (none), **D1** (boundary guidance), **D2** (regex screening + withhold), **D3** (both)
 - Shadow-mode authorization gate for proposed tool calls (no real actions)
@@ -26,17 +27,21 @@ promptshield/
 ├── .gitignore
 ├── scenarios/
 │   ├── README.md
-│   ├── web/
-│   │   └── web-001.yaml
-│   ├── document/
-│   │   └── document-001.yaml
-│   └── email/
-│       └── email-001.yaml
+│   ├── manifest.json       # frozen dev/held-out split + case hashes
+│   ├── web/                # web-001.yaml … web-008.yaml
+│   ├── document/           # document-001.yaml … document-008.yaml
+│   └── email/              # email-001.yaml … email-008.yaml
+├── docs/
+│   └── dataset/
+│       ├── PROVENANCE.md
+│       ├── BENCHMARK_COMPARISON.md
+│       └── inventory.csv
 ├── src/
 │   └── promptshield/
 │       ├── __init__.py
 │       ├── schema.py
-│       ├── cases.py         
+│       ├── cases.py
+│       ├── dataset.py       
 │       ├── defenses.py
 │       ├── models.py
 │       ├── tools.py
@@ -88,8 +93,16 @@ pip install -e ".[dev,openai]"
 ## Quick Start
 
 ```bash
-# 1. Validate scenarios
+# 1. Validate scenarios (consistency checks + frozen-manifest check)
 promptshield validate --cases scenarios
+promptshield inventory                      # case counts by workflow/kind/family/split
+
+# Tune defenses on the dev split only; held-out is for the frozen comparison
+promptshield run --split dev --backend mock --output runs/dev-mock.jsonl
+
+# Demo: a few cases (ids or globs, repeatable) under selected defenses
+promptshield run --case "document-001-a-*" --case document-001-benign \
+  --defenses D0,D2 --backend mock --output runs/demo.jsonl
 
 # 2. Run with the offline mock backend (safe, no API key needed)
 promptshield run --cases scenarios --backend mock --output runs/mock.jsonl
@@ -133,7 +146,7 @@ Screening patterns are intentionally simple teaching baselines, **not** robust d
 
 ## Important Limitations
 
-- The six included cases are synthetic examples only.
+- The 120 included cases (24 source-scenario groups) are original synthetic examples; see [scenarios/README.md](scenarios/README.md) and [docs/dataset/](docs/dataset/).
 - Keyword-based utility checks are smoke-test proxies, not validated task success.
 - Marker appearance in the answer is marked `review_required` (quotation is not automatically attack success).
 - Do **not** publish mock results as evidence of defense performance.

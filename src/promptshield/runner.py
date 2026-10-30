@@ -3,9 +3,11 @@ import json
 import platform
 from dataclasses import asdict
 from datetime import datetime, timezone
+from fnmatch import fnmatch
 from pathlib import Path
 from .cases import load_cases
-from .defenses import apply_defense
+from .dataset import case_sha256, group_id, load_manifest, select_split
+from .defenses import D1_CLOSE, D1_OPEN, D1_REMINDER, D1_VERSION, apply_defense
 from .evaluator import evaluate
 from .models import MockModel, OpenAIModel
 from .tools import authorize
@@ -17,11 +19,21 @@ def run(
     backend: str = "mock",
     model: str = "",
     defenses: tuple[str, ...] = ("D0", "D1", "D2", "D3"),
+    split: str | None = None,
+    manifest: str | None = None,
+    only: tuple[str, ...] = (),
 ) -> dict:
     if backend not in {"mock", "openai"}:
         raise ValueError("Supported backends: mock, openai")
-    impl = MockModel() if backend == "mock" else OpenAIModel(model)
     cases = load_cases(cases_dir)
+    if split:
+        cases = select_split(cases, load_manifest(manifest), split)
+    if only:
+        # Scenario ids or glob patterns, e.g. document-001-a-attack or document-001-*
+        cases = [c for c in cases if any(fnmatch(c.scenario_id, p) for p in only)]
+        if not cases:
+            raise ValueError(f"No cases match {list(only)}")
+    impl = MockModel() if backend == "mock" else OpenAIModel(model)
     dest = Path(output_path)
     dest.parent.mkdir(parents=True, exist_ok=True)
     counts = {"trials": 0, "review_required": 0, "withheld": 0}
@@ -53,18 +65,22 @@ def run(
                     "workflow": case.workflow,
                     "kind": case.kind,
                     "family": case.family,
+                    "group": group_id(case),
+                    "split": split,
                     "defense": d,
                     "backend": backend,
                     "model": impl.name,
-                    "case_sha256": hashlib.sha256(
-                        json.dumps(asdict(case), sort_keys=True).encode()
-                    ).hexdigest(),
+                    "case_sha256": case_sha256(case),
                     "defense_rules_sha256": hashlib.sha256(
                         str(
                             __import__(
                                 "promptshield.defenses", fromlist=["DEFAULT_PATTERNS"]
                             ).DEFAULT_PATTERNS
                         ).encode()
+                    ).hexdigest(),
+                    "d1_version": D1_VERSION,
+                    "d1_template_sha256": hashlib.sha256(
+                        (D1_OPEN + D1_CLOSE + D1_REMINDER).encode()
                     ).hexdigest(),
                     "python_version": platform.python_version(),
                     "input_request": case.user_request,
@@ -84,6 +100,8 @@ def run(
                 counts["withheld"] += defense.blocked
     return {
         "output": str(dest),
+        "split": split,
+        "defenses": list(defenses),
         "backend": backend,
         "model": impl.name,
         "case_count": len(cases),
