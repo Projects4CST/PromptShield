@@ -33,7 +33,7 @@ def main():
     )
     simulate = commands.add_parser("run", help="Run mock or live-provider trials")
     simulate.add_argument("--cases", default="scenarios")
-    simulate.add_argument("--backend", choices=["mock", "openai"], default="mock")
+    simulate.add_argument("--backend", choices=["mock", "openai", "ollama"], default="mock")
     simulate.add_argument("--model", default="")
     simulate.add_argument("--output", default="runs/results.jsonl")
     simulate.add_argument(

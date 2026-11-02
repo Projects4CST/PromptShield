@@ -9,7 +9,7 @@ from .cases import load_cases
 from .dataset import case_sha256, group_id, load_manifest, select_split
 from .defenses import D1_CLOSE, D1_OPEN, D1_REMINDER, D1_VERSION, apply_defense
 from .evaluator import evaluate
-from .models import MockModel, OpenAIModel
+from .models import MockModel, OllamaModel, OpenAIModel
 from .tools import authorize
 
 
@@ -23,8 +23,9 @@ def run(
     manifest: str | None = None,
     only: tuple[str, ...] = (),
 ) -> dict:
-    if backend not in {"mock", "openai"}:
-        raise ValueError("Supported backends: mock, openai")
+    if backend not in {"mock", "openai", "ollama"}:
+        raise ValueError("Supported backends: mock, openai, ollama")
+
     cases = load_cases(cases_dir)
     if split:
         cases = select_split(cases, load_manifest(manifest), split)
@@ -33,7 +34,14 @@ def run(
         cases = [c for c in cases if any(fnmatch(c.scenario_id, p) for p in only)]
         if not cases:
             raise ValueError(f"No cases match {list(only)}")
-    impl = MockModel() if backend == "mock" else OpenAIModel(model)
+        
+    if backend == "mock":
+        impl = MockModel()
+    elif backend == "openai":
+        impl = OpenAIModel(model)
+    else:
+        impl = OllamaModel(model or "llama3.2")
+
     dest = Path(output_path)
     dest.parent.mkdir(parents=True, exist_ok=True)
     counts = {"trials": 0, "review_required": 0, "withheld": 0}

@@ -4,9 +4,15 @@ from .schema import Case
 
 
 def load_cases(directory: str | Path) -> list[Case]:
-    directory = Path(directory)
-    # Support both flat and nested folders (web/, document/, email/)
-    files = sorted(directory.glob("**/*.yaml"))
+    path = Path(directory)
+
+    if path.is_file() and path.suffix in {".yaml", ".yml"}:
+        files = [path]
+    elif path.is_dir():
+        files = sorted(path.glob("**/*.yaml")) + sorted(path.glob("**/*.yml"))
+    else:
+        raise ValueError(f"No YAML cases found in {directory}")
+
     if not files:
         raise ValueError(f"No YAML cases found in {directory}")
 

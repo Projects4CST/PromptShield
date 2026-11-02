@@ -1,6 +1,6 @@
 import json
 import os
-import re
+import urllib.request
 from dataclasses import dataclass
 
 
@@ -36,6 +36,21 @@ def build_prompt(request: str, content: str, guidance: str) -> tuple[str, str]:
     return instructions, f"USER TASK:\n{request}\n\nCONTENT:\n{content}"
 
 
+def _parse_output(raw: str) -> ModelOutput:
+    """Try to extract answer + optional tool_call from model text."""
+    try:
+        parsed = json.loads(raw)
+        if isinstance(parsed, dict):
+            call = parsed.get("tool_call")
+            return ModelOutput(
+                text=str(parsed.get("answer", "")),
+                proposed_tool_call=call if isinstance(call, dict) else None,
+            )
+    except (json.JSONDecodeError, TypeError):
+        pass
+    return ModelOutput(text=raw)
+
+
 class OpenAIModel:
     """Real provider adapter. Text-only JSON tool proposals are parsed; NO tools executed."""
 
@@ -57,14 +72,42 @@ class OpenAIModel:
             store=False,
         )
         raw = response.output_text or ""
-        try:
-            parsed = json.loads(raw)
-            if isinstance(parsed, dict):
-                call = parsed.get("tool_call")
-                return ModelOutput(
-                    text=str(parsed.get("answer", "")),
-                    proposed_tool_call=call if isinstance(call, dict) else None,
-                )
-        except (json.JSONDecodeError, TypeError):
-            pass
-        return ModelOutput(text=raw)
+        return _parse_output(raw)
+
+
+class OllamaModel:
+    """Local Ollama adapter. No API key required. Assumes Ollama is running on localhost."""
+
+    def __init__(self, name: str, host: str = "http://localhost:11434"):
+        self.name = name
+        self.host = host.rstrip("/")
+
+    def generate(self, request: str, content: str, guidance: str) -> ModelOutput:
+        instructions, prompt = build_prompt(request, content, guidance)
+
+        payload = {
+            "model": self.name,
+            "messages": [
+                {"role": "system", "content": instructions},
+                {"role": "user", "content": prompt},
+            ],
+            "stream": False,
+            "options": {
+                "temperature": 0.0,
+                "num_predict": 450,
+            },
+        }
+
+        data = json.dumps(payload).encode("utf-8")
+        req = urllib.request.Request(
+            f"{self.host}/api/chat",
+            data=data,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+
+        with urllib.request.urlopen(req, timeout=120) as resp:
+            result = json.loads(resp.read().decode("utf-8"))
+
+        raw = result.get("message", {}).get("content", "") or ""
+        return _parse_output(raw)
