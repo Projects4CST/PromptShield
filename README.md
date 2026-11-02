@@ -117,9 +117,10 @@ pytest -q
 > **Important:** A mock run only proves that the orchestration and scoring code works.  
 > **It does not measure any defense effectiveness.**
 
-### Real model (optional)
+### Real model
 
 ```bash
+# This is for Open AI
 export OPENAI_API_KEY="your-key-here"
 
 promptshield run \
@@ -128,7 +129,18 @@ promptshield run \
   --cases scenarios \
   --output runs/live.jsonl
 
+# For Ollama model
+# Here --cases for specific case files
+
+promptshield run \
+  --cases scenarios/web/web-001.yaml \
+  --backend ollama \
+  --model gemma3 \
+  --output runs/ollama_one.jsonl
+
+# Reporting (Summary and summary + json)
 promptshield report --input runs/live.jsonl
+promptshield report --input runs/live.jsonl --json
 ```
 
 The OpenAI adapter never grants real tools. It only asks the model to optionally propose a tool call in JSON. Always inspect the raw traces.
