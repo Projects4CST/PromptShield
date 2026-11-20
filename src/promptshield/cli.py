@@ -13,7 +13,7 @@ from .dataset import (
     write_inventory,
 )
 from .runner import run
-from .report import summarize, format_report
+from .report import summarize, format_report, write_report
 
 
 def default_manifest(cases_dir: str) -> str:
@@ -76,6 +76,11 @@ def main():
         "report", help="Generate provisional summary from traces"
     )
     report.add_argument("--input", default="runs/results.jsonl")
+    report.add_argument(
+        "--out",
+        default=None,
+        help="Optional output path to save the report (e.g. docs/reports/heldout-gemma3.md)",
+    )
     report.add_argument(
         "--json",
         action="store_true",
@@ -153,10 +158,15 @@ def main():
     elif args.command == "report":
         result = summarize(args.input)
 
+        if args.out:
+            saved_path = write_report(result, args.out, as_json=args.json)
+            if not args.json:
+                print(f"Report written to {saved_path}\n")
+
         if args.json:
             print(json.dumps(result, ensure_ascii=False, indent=2))
         else:
-            print(format_report(result))
+            print(format_report(result, markdown=False))
 
     else:
         parser.print_help()
