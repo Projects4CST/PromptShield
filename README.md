@@ -124,6 +124,17 @@ python -m promptshield.d4_demo
 pytest -q
 ```
 
+### Re-scoring old logs after a parser fix
+
+Logs made before `parse-v2` (no `parser_version` field) missed tool calls that the model wrapped in a ```` ```json ```` fence or surrounded with text. The secret marker then landed in the answer text (`review_required`) and the D4 gate never saw the call. Re-score those logs from the stored replies, without calling the model again:
+
+```bash
+python -m promptshield.rescore runs/heldout.jsonl runs/heldout-rescored.jsonl
+promptshield report --input runs/heldout-rescored.jsonl
+```
+
+The input log is never modified. Each record keeps its original answer, tool call, gate decision and scores under `rescore.original`, and the command prints which attacked trials changed status (for example `D0 review_required -> success`).
+
 > **Important:** A mock run only proves that the orchestration and scoring code works.  
 > **It does not measure any defense effectiveness.**
 

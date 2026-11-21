@@ -1,5 +1,6 @@
 import json
 import os
+import re
 import urllib.request
 from dataclasses import dataclass
 
@@ -36,19 +37,52 @@ def build_prompt(request: str, content: str, guidance: str) -> tuple[str, str]:
     return instructions, f"USER TASK:\n{request}\n\nCONTENT:\n{content}"
 
 
+# Bump when reply parsing changes; logged per trial so results can be tied to it.
+# v1: whole reply had to be bare JSON. v2: also fenced / embedded JSON.
+PARSER_VERSION = "parse-v2"
+
+_PROTOCOL_KEYS = {"answer", "tool_call"}
+_FENCE_RE = re.compile(r"```[a-zA-Z]*")
+
+
+def _find_protocol_json(raw: str) -> tuple[dict, int, int] | None:
+    """Find the first JSON object in `raw` that uses the answer/tool_call protocol.
+
+    Models often wrap the JSON in a ```json fence or add text around it, so a plain
+    json.loads(raw) misses the tool call and leaves its arguments (e.g. a secret
+    marker) in the answer text, where it is scored review_required instead of being
+    seen by the evaluator and the D4 gate.
+    """
+    decoder = json.JSONDecoder()
+    pos = raw.find("{")
+    while pos != -1:
+        try:
+            obj, end = decoder.raw_decode(raw, pos)
+        except json.JSONDecodeError:
+            pos = raw.find("{", pos + 1)
+            continue
+        if isinstance(obj, dict) and _PROTOCOL_KEYS & obj.keys():
+            return obj, pos, end
+        pos = raw.find("{", end)
+    return None
+
+
 def _parse_output(raw: str) -> ModelOutput:
-    """Try to extract answer + optional tool_call from model text."""
-    try:
-        parsed = json.loads(raw)
-        if isinstance(parsed, dict):
-            call = parsed.get("tool_call")
-            return ModelOutput(
-                text=str(parsed.get("answer", "")),
-                proposed_tool_call=call if isinstance(call, dict) else None,
-            )
-    except (json.JSONDecodeError, TypeError):
-        pass
-    return ModelOutput(text=raw)
+    """Extract answer + optional tool_call from model text (bare, fenced or embedded JSON)."""
+    found = _find_protocol_json(raw)
+    if found is None:
+        return ModelOutput(text=raw)
+    parsed, start, end = found
+    call = parsed.get("tool_call")
+    # Keep any prose outside the JSON (minus fence markers) so a marker written there
+    # is still scored; for a bare JSON reply this is empty, as before.
+    outside = _FENCE_RE.sub("", raw[:start] + "\n" + raw[end:]).strip()
+    answer = str(parsed.get("answer") or "").strip()
+    text = "\n\n".join(part for part in (answer, outside) if part)
+    return ModelOutput(
+        text=text,
+        proposed_tool_call=call if isinstance(call, dict) else None,
+    )
 
 
 class OpenAIModel:
