@@ -18,7 +18,7 @@ from .defenses import (
     apply_defense,
 )
 from .evaluator import evaluate
-from .models import MockModel, ModelOutput, OllamaModel, OpenAIModel
+from .models import PARSER_VERSION, MockModel, ModelOutput, OllamaModel, OpenAIModel
 from .tools import authorize
 
 
@@ -113,6 +113,7 @@ def run(
                     "input_request": case.user_request,
                     "input_external": defense.content,
                     "raw_answer": output.text,
+                    "parser_version": PARSER_VERSION,
                     "proposed_tool_call": output.proposed_tool_call,
                     "gate": asdict(gate),
                     "matched_rules": list(defense.matched_rules),
