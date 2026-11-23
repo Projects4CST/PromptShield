@@ -74,7 +74,7 @@ def test_run_and_report(tmp_path):
     assert all(r["is_real_model_evidence"] is False for r in records)
     assert all(r["gate"]["would_execute"] is False for r in records)
     summary = summarize(str(log))
-    assert summary["is_real_model_evidence"] is False
+    assert summary["summary"]["is_real_model_evidence"] is False
     assert summary["configurations"]["D2"]["benign_withheld"] >= 1
 
 
