@@ -1,0 +1,49 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12"]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install package (editable + dev)
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+          # Fallback if no [dev] extra is defined:
+          # pip install -e . pytest PyYAML
+
+      - name: Validate scenarios
+        run: promptshield validate --cases scenarios
+
+      - name: Inventory (smoke)
+        run: promptshield inventory --cases scenarios
+
+      - name: Unit tests
+        run: pytest -q
+
+      - name: Mock smoke run
+        run: |
+          mkdir -p runs
+          promptshield run \
+            --cases scenarios \
+            --backend mock \
+            --defenses D0 \
+            --output runs/ci-smoke.jsonl
+          promptshield report --input runs/ci-smoke.jsonl
